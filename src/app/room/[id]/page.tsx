@@ -119,29 +119,45 @@ export default function RoomPage() {
     try {
       // ランダムに1人をバグに選ぶ
       const bugIndex = Math.floor(Math.random() * players.length);
+      console.log('Selected bug index:', bugIndex);
       
       // 選択された難易度のエンジニアワードをランダムに選択
       const { data: words, error: wordsError } = await supabase
         .from('engineering_words')
         .select()
-        .eq('difficulty', selectedDifficulty)
-        .limit(1);
+        .eq('difficulty', selectedDifficulty);
 
-      if (wordsError) throw wordsError;
+      if (wordsError) {
+        console.error('Failed to fetch words:', wordsError);
+        throw wordsError;
+      }
+
+      if (!words || words.length === 0) {
+        console.error('No words found for difficulty:', selectedDifficulty);
+        throw new Error(`選択された難易度（${selectedDifficulty}）のワードが見つかりません`);
+      }
+
+      const selectedWord = words[Math.floor(Math.random() * words.length)];
+      console.log('Selected word:', selectedWord.word);
 
       // プレイヤーの役職とワードを更新
       for (let i = 0; i < players.length; i++) {
-        await supabase
+        const { error: updateError } = await supabase
           .from('players')
           .update({
             role: i === bugIndex ? 'bug' : 'engineer',
-            word: i === bugIndex ? 'バグ' : words[0].word,
+            word: i === bugIndex ? 'バグ' : selectedWord.word,
           })
           .eq('id', players[i].id);
+
+        if (updateError) {
+          console.error(`Failed to update player ${players[i].id}:`, updateError);
+          throw updateError;
+        }
       }
 
       // 部屋のステータスを更新
-      await supabase
+      const { error: roomError } = await supabase
         .from('rooms')
         .update({
           status: 'playing',
@@ -149,9 +165,16 @@ export default function RoomPage() {
           difficulty: selectedDifficulty,
         })
         .eq('id', room.id);
+
+      if (roomError) {
+        console.error('Failed to update room:', roomError);
+        throw roomError;
+      }
+
+      console.log('Game started successfully');
     } catch (err) {
-      console.error(err);
-      setError('ゲームの開始に失敗しました');
+      console.error('Game start error:', err);
+      setError(err instanceof Error ? err.message : 'ゲームの開始に失敗しました');
     }
   };
 
