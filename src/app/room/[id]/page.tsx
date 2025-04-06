@@ -169,18 +169,48 @@ export default function RoomPage() {
       }
 
       // 部屋のステータスを更新
-      const { error: roomError } = await supabase
+      const { data: updatedRoom, error: roomError } = await supabase
         .from('rooms')
         .update({
           status: 'playing',
           phase: 'discussion',
           difficulty: selectedDifficulty,
         })
-        .eq('id', room.id);
+        .eq('id', room.id)
+        .select()
+        .single();
 
       if (roomError) {
         console.error('Failed to update room:', roomError);
         throw roomError;
+      }
+
+      // 状態を直接更新
+      if (updatedRoom) {
+        console.log('Updated room:', updatedRoom);
+        setRoom(updatedRoom);
+      }
+
+      // 更新されたプレイヤー情報を取得
+      const { data: updatedPlayers, error: playersError } = await supabase
+        .from('players')
+        .select()
+        .eq('room_id', room.id);
+
+      if (playersError) {
+        console.error('Failed to fetch updated players:', playersError);
+        throw playersError;
+      }
+
+      if (updatedPlayers) {
+        console.log('Updated players:', updatedPlayers);
+        setPlayers(updatedPlayers);
+        const sessionId = localStorage.getItem('sessionId');
+        const updatedCurrentPlayer = updatedPlayers.find(p => p.id === sessionId);
+        if (updatedCurrentPlayer) {
+          console.log('Updated current player:', updatedCurrentPlayer);
+          setCurrentPlayer(updatedCurrentPlayer);
+        }
       }
 
       console.log('Game started successfully');
