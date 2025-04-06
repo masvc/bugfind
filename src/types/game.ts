@@ -13,7 +13,7 @@ export interface Room {
   current_players: number;
   host_id: string;
   words: string[];
-  difficulty: WordDifficulty;
+  difficulty: WordDifficulty | null;
 }
 
 export interface Player {
