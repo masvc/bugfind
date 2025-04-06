@@ -14,6 +14,9 @@ export function GamePhase({ room, players, currentPlayer }: GamePhaseProps) {
   const [votes, setVotes] = useState<Vote[]>([]);
 
   useEffect(() => {
+    console.log('GamePhase mounted with room:', room);
+    console.log('Current player:', currentPlayer);
+
     if (room.phase !== 'voting') return;
 
     // 投票データを取得
@@ -28,6 +31,7 @@ export function GamePhase({ room, players, currentPlayer }: GamePhaseProps) {
         return;
       }
 
+      console.log('Fetched votes:', data);
       setVotes(data);
     };
 
@@ -38,28 +42,37 @@ export function GamePhase({ room, players, currentPlayer }: GamePhaseProps) {
       .channel('votes_changes')
       .on('postgres_changes',
         { event: '*', schema: 'public', table: 'votes', filter: `room_id=eq.${room.id}` },
-        () => {
+        (payload) => {
+          console.log('Votes changed:', payload);
           fetchVotes();
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Votes subscription status:', status);
+      });
 
     return () => {
+      console.log('Cleaning up votes subscription...');
       votesSubscription.unsubscribe();
     };
   }, [room.id, room.phase]);
 
   const handleTimeUp = async () => {
     if (room.phase === 'discussion') {
-      // 討論フェーズ終了時、投票フェーズへ移行
-      await supabase
+      console.log('Discussion time up, moving to voting phase...');
+      const { error } = await supabase
         .from('rooms')
         .update({ phase: 'voting' })
         .eq('id', room.id);
+
+      if (error) {
+        console.error('Failed to update room phase:', error);
+      }
     }
   };
 
   if (room.status !== 'playing') {
+    console.log('Room is not in playing state:', room.status);
     return null;
   }
 
@@ -70,9 +83,12 @@ export function GamePhase({ room, players, currentPlayer }: GamePhaseProps) {
           <h2 className="text-2xl font-bold mb-2">
             {room.phase === 'discussion' ? '討論フェーズ' : '投票フェーズ'}
           </h2>
-          {currentPlayer && (
+          {currentPlayer && currentPlayer.word && (
             <div className="text-lg">
               あなたのワード: <span className="font-bold">{currentPlayer.word}</span>
+              {currentPlayer.role === 'bug' && (
+                <p className="text-sm text-red-600 mt-1">あなたはバグです！</p>
+              )}
             </div>
           )}
         </div>

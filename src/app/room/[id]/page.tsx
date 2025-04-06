@@ -62,11 +62,30 @@ export default function RoomPage() {
         async (payload) => {
           console.log('Room changed:', payload);
           if (payload.new) {
-            setRoom(payload.new as Room);
+            const newRoom = payload.new as Room;
+            setRoom(newRoom);
+            
+            // ゲーム開始時の処理
+            if (newRoom.status === 'playing' && newRoom.phase === 'discussion') {
+              console.log('Game started, fetching updated player data...');
+              const { data: updatedPlayers } = await supabase
+                .from('players')
+                .select()
+                .eq('room_id', params.id);
+              
+              if (updatedPlayers) {
+                setPlayers(updatedPlayers);
+                const sessionId = localStorage.getItem('sessionId');
+                const updatedCurrentPlayer = updatedPlayers.find(p => p.id === sessionId);
+                setCurrentPlayer(updatedCurrentPlayer || null);
+              }
+            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Room subscription status:', status);
+      });
 
     const playersSubscription = supabase
       .channel('players_changes')
@@ -80,17 +99,24 @@ export default function RoomPage() {
             .eq('room_id', params.id);
 
           if (!playersError && playersData) {
+            console.log('Updated players data:', playersData);
             setPlayers(playersData);
             // 現在のプレイヤーの情報も更新
             const sessionId = localStorage.getItem('sessionId');
             const currentPlayerData = playersData.find(p => p.id === sessionId);
-            setCurrentPlayer(currentPlayerData || null);
+            if (currentPlayerData) {
+              console.log('Updated current player:', currentPlayerData);
+              setCurrentPlayer(currentPlayerData);
+            }
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Players subscription status:', status);
+      });
 
     return () => {
+      console.log('Cleaning up subscriptions...');
       roomSubscription.unsubscribe();
       playersSubscription.unsubscribe();
     };
@@ -219,11 +245,13 @@ export default function RoomPage() {
           )}
         </div>
 
-        <GamePhase
-          room={room}
-          players={players}
-          currentPlayer={currentPlayer}
-        />
+        {room.status === 'playing' && (
+          <GamePhase
+            room={room}
+            players={players}
+            currentPlayer={currentPlayer}
+          />
+        )}
 
         <div className="bg-white p-6 rounded-lg shadow-md">
           <h2 className="text-xl font-bold mb-4">プレイヤー一覧</h2>
@@ -231,13 +259,19 @@ export default function RoomPage() {
             {players.map((player) => (
               <div
                 key={player.id}
-                className="p-4 border rounded-md text-center"
+                className={`p-4 border rounded-md text-center ${
+                  currentPlayer?.id === player.id ? 'border-blue-500' : ''
+                }`}
               >
                 <p className="font-medium">{player.nickname}</p>
-                {room.status === 'playing' && currentPlayer?.id === player.id && (
-                  <p className="text-sm text-gray-600 mt-2">
-                    {player.word}
-                  </p>
+                {room.status === 'playing' && currentPlayer?.id === player.id && player.word && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium text-gray-600">あなたのワード:</p>
+                    <p className="text-sm text-gray-900">{player.word}</p>
+                    {player.role === 'bug' && (
+                      <p className="text-xs text-red-600 mt-1">あなたはバグです！</p>
+                    )}
+                  </div>
                 )}
               </div>
             ))}
