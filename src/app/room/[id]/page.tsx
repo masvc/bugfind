@@ -55,58 +55,44 @@ export default function RoomPage() {
     fetchRoomData();
 
     // リアルタイム更新の購読
-    const channel = supabase.channel('db-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'rooms',
-          filter: `id=eq.${params.id}`
-        },
-        (payload) => {
-          console.log('Room updated:', payload);
+    const roomSubscription = supabase
+      .channel('room_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'rooms', filter: `id=eq.${params.id}` },
+        async (payload) => {
+          console.log('Room changed:', payload);
           if (payload.new) {
             setRoom(payload.new as Room);
           }
         }
       )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'players',
-          filter: `room_id=eq.${params.id}`
-        },
+      .subscribe();
+
+    const playersSubscription = supabase
+      .channel('players_changes')
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'players', filter: `room_id=eq.${params.id}` },
         async (payload) => {
           console.log('Players changed:', payload);
-          const { data } = await supabase
+          const { data: playersData, error: playersError } = await supabase
             .from('players')
             .select()
             .eq('room_id', params.id);
-          
-          if (data) {
-            console.log('Updated players:', data);
-            setPlayers(data);
-            // 現在のプレイヤーの状態も更新
+
+          if (!playersError && playersData) {
+            setPlayers(playersData);
+            // 現在のプレイヤーの情報も更新
             const sessionId = localStorage.getItem('sessionId');
-            if (sessionId) {
-              const currentPlayerData = data.find(p => p.id === sessionId);
-              setCurrentPlayer(currentPlayerData || null);
-            }
+            const currentPlayerData = playersData.find(p => p.id === sessionId);
+            setCurrentPlayer(currentPlayerData || null);
           }
         }
-      );
+      )
+      .subscribe();
 
-    // チャンネルを購読開始
-    channel.subscribe((status) => {
-      console.log('Subscription status:', status);
-    });
-
-    // クリーンアップ時にチャンネルを解除
     return () => {
-      channel.unsubscribe();
+      roomSubscription.unsubscribe();
+      playersSubscription.unsubscribe();
     };
   }, [params.id]);
 
