@@ -1,4 +1,8 @@
-# BugFind - エンジニア版ワードウルフ
+# BugFind
+
+エンジニア版ワードウルフ
+
+デモ: https://bugfind.vercel.app/
 
 ## プロジェクト概要
 
